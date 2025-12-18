@@ -1,0 +1,19 @@
+# Pesos de modelos (YOLO)
+*.pt
+*.onnx
+
+# Vídeos
+*.mp4
+*.avi
+*.mov
+*.mkv
+
+# Python
+__pycache__/
+*.pyc
+venv/
+.env
+
+# IDE
+.vscode/
+.idea/
