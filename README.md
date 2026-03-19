@@ -1,27 +1,26 @@
-# Car & Face Detection (YOLOv8)
+# Vehicle Detection, Tracking, and Classification (YOLO)
 
-This project implements a vehicle detection, tracking, and counting system for videos or webcam streams using Computer Vision with YOLOv8, OpenCV, and Python.
+This project implements a vehicle detection, tracking, counting, and classification system for videos or webcam streams using Computer Vision with YOLO models, OpenCV, CLIP embeddings, and Python.
 
 ## Features
-The system detects vehicles, assigns temporary IDs, tracks their movement across frames, and counts how many vehicles enter and exit a scene by crossing a predefined virtual line.
-- Real-time vehicle detection
-- Simple distance-based tracking
-- Temporary ID assignment for vehicles
-
-Counting of:
-- vehicles that enter
-- vehicles that exit
-
-Support for:
-- Webcam
-- Local video files
-- Real-time visualization with bounding boxes and IDs
+The system detects vehicles, assigns temporary IDs, tracks their movement across frames, classifies detected objects, and counts how many vehicles enter and exit a scene by crossing predefined virtual lines. It also estimates vehicle speed using radar-like calculations.
+- Real-time vehicle detection and tracking
+- Object classification using YOLO classification models
+- Image embeddings using CLIP for potential re-identification
+- Speed estimation (radar functionality)
+- Counting of vehicles entering and exiting
+- Support for webcam and local video files
+- Real-time visualization with bounding boxes, IDs, and counters
 
 ## Files
-- [car_counter.py](car_counter.py): Counts/detects cars (example script).
-- [detectar_rostos.py](detectar_rostos.py): Detects faces (example script).
-- [yolov8m.pt](yolov8m.pt): YOLOv8 medium model (optional, higher accuracy).
-- [yolov8n.pt](yolov8n.pt): YOLOv8 nano model (optional, faster/inference-on-edge).
+- [main.py](main.py): Main script for vehicle detection, tracking, counting, classification, and speed estimation.
+- [classifier.py](classifier.py): Handles object classification using YOLO classification models.
+- [config.py](config.py): Configuration file with constants for video source, frame dimensions, thresholds, and vehicle keywords.
+- [detectar_rostos.py](detectar_rostos.py): Face detection script using Haar cascades.
+- [embedding.py](embedding.py): Generates image embeddings using CLIP for detected objects.
+- [tracker.py](tracker.py): Centroid-based object tracker for maintaining object IDs across frames.
+- [utils.py](utils.py): Utility functions, including bounding box merging.
+- [testecv.py](testecv.py): Test script for computer vision functionalities.
 
 ## Requirements
 - Python 3.8+
@@ -29,38 +28,66 @@ Support for:
 - ultralytics
 - opencv-python
 - numpy
+- pillow (PIL)
+- clip-by-openai
+- scipy
 
-Install common dependencies with:
+Install dependencies with:
 
 ```bash
-python -m pip install ultralytics opencv-python numpy torch
+pip install ultralytics opencv-python numpy torch pillow git+https://github.com/openai/CLIP.git scipy
 ```
 
 Note: Install the correct `torch` wheel for your CUDA version if you want GPU acceleration. See https://pytorch.org for instructions.
 
 ## Models
-Place your model weights (`yolov8m.pt` or `yolov8n.pt`) in the project root (same folder as the scripts). Use `yolov8n.pt` for faster but less accurate results and `yolov8m.pt` for better accuracy.
+Place your model weights in the project root (same folder as the scripts). The project uses various YOLO models for detection and classification:
+
+Detection models:
+- [yolov8n.pt](yolov8n.pt): YOLOv8 nano (fast, less accurate)
+- [yolov8s.pt](yolov8s.pt): YOLOv8 small
+- [yolov8m.pt](yolov8m.pt): YOLOv8 medium (higher accuracy)
+- [yolov10n.pt](yolov10n.pt): YOLOv10 nano
+- [yolov10s.pt](yolov10s.pt): YOLOv10 small
+- [yolov10m.pt](yolov10m.pt): YOLOv10 medium
+- [yolo26n.pt](yolo26n.pt): YOLOv2.6 nano
+
+Classification models:
+- [yolov8n-cls.pt](yolov8n-cls.pt): YOLOv8 nano classifier
+- [yolov8s-cls.pt](yolov8s-cls.pt): YOLOv8 small classifier
+- [yolov8m-cls.pt](yolov8m-cls.pt): YOLOv8 medium classifier
+- [yolo11m-cls.pt](yolo11m-cls.pt): YOLOv11 medium classifier
+- [yolo26n-cls.pt](yolo26n-cls.pt): YOLOv2.6 nano classifier
 
 ## Usage
-Basic usage examples — run from the project root:
+Run the main vehicle detection and tracking script:
 
 ```bash
-python car_counter.py
+python main.py
+```
+
+For face detection:
+
+```bash
 python detectar_rostos.py
 ```
 
-If the scripts accept command-line options (source video, camera index, etc.), pass them as you normally would. Eg:
+To run the test script:
 
 ```bash
-python car_counter.py --source 0
+python testecv.py
 ```
 
+The scripts use the video source specified in `config.py` (default: "videstrada.mp4"). Modify `config.py` to change settings like frame size, thresholds, and line positions.
+
 ## Notes
-- This README assumes the scripts are self-contained and load model weights from the project root.
-- If you see errors related to `torch` or CUDA, verify your `torch` installation matches your system GPU/drivers.
+- Ensure model files are in the project root.
+- For GPU acceleration, install PyTorch with CUDA support.
+- The system uses background subtraction for motion detection and centroid tracking for object persistence.
+- Speed estimation requires calibrated distance settings in `config.py`.
 
 ## License
 This repository does not include a license file. Add one if you plan to share the code publicly.
 
 ---
-Created automatically to document this small project.
+Created automatically to document this project.

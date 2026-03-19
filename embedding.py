@@ -2,6 +2,9 @@ from PIL import Image
 import torch
 import clip
 import numpy as np
+from database import VectorDatabase
+
+db = VectorDatabase()
 
 class Embedding:
 
