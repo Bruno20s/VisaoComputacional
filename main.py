@@ -6,12 +6,18 @@ from config import *
 from tracker import CentroidTracker
 from utils import merge_boxes
 from classifier import classify_object
-from embedding import Embedding
+from embedding import Embedding, find_similar_id
+from database import VectorDatabase
+
+db = VectorDatabase()
 
 embedder = Embedding()
 
 classified_ids = {}
 embeddings_ids = {}
+
+id_map = {}
+SIMILARITY_THRESHOLD = 0.98
 
 count_in = 0
 count_out = 0
@@ -44,6 +50,10 @@ while True:
         break
 
     frame = cv2.resize(frame, (FRAME_WIDTH, FRAME_HEIGHT))
+    
+    h, w = frame.shape[:2]
+
+    MERGE_DISTANCE = int(w * MERGE_DISTANCE_RATIO)
 
     gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
 
@@ -79,20 +89,23 @@ while True:
 
     # desenhar linhas
     cv2.line(frame, (0, LINE_Y), (FRAME_WIDTH, LINE_Y), (255, 0, 0), 2)
-    cv2.line(frame, (0, LINE1_Y), (FRAME_WIDTH, LINE1_Y), (0, 255, 255), 2)
-    cv2.line(frame, (0, LINE2_Y), (FRAME_WIDTH, LINE2_Y), (255, 255, 0), 2)
+    cv2.line(frame, (0, LINE1_Y), (FRAME_WIDTH, LINE1_Y), (0, 255, 0), 2)
+    cv2.line(frame, (0, LINE2_Y), (FRAME_WIDTH, LINE2_Y), (0, 0, 255), 2)
 
     for oid, (cx, cy) in objects.items():
 
         x, y, w, h = tracker.boxes[oid]
 
-        prev_y = last_positions.get(oid, cy)
+        # usar ID real
+        real_id = id_map.get(oid, oid)
+
+        prev_y = last_positions.get(real_id, cy)
         now = time.time()
 
-        # classificação e embedding
+        # classificação e embedding (APENAS UMA VEZ)
         if oid not in classified_ids:
 
-            if prev_y < LINE1_Y <= cy or prev_y > LINE2_Y >= cy:
+            if prev_y < LINE2_Y <= cy or prev_y > LINE1_Y >= cy:
 
                 classified_ids[oid] = classify_object(frame, (x, y, w, h))
 
@@ -107,8 +120,25 @@ while True:
                 crop = frame[y1:y2, x1:x2]
 
                 if crop.size != 0:
+
                     embedding = embedder.get_image_embedding(crop)
-                    embeddings_ids[oid] = embedding
+
+                    # comparar apenas uma vez
+                    similar_id, score = find_similar_id(
+                        embedding,
+                        embeddings_ids,
+                        SIMILARITY_THRESHOLD
+                    )
+
+                    if similar_id is not None:
+                        print(f"[MATCH] ID {oid} → {similar_id} | score={score:.2f}")
+                        id_map[oid] = similar_id
+                        real_id = similar_id
+                    else:
+                        embeddings_ids[oid] = embedding
+                        db.insert_vector(oid, embedding)
+                        id_map[oid] = oid
+                        real_id = oid
 
         classes = classified_ids.get(oid, [("...", 0.0)])
 
@@ -117,16 +147,16 @@ while True:
 
         texto_classes = "veiculo" if is_vehicle else "nao veiculo"
 
-        # contagem entrada/saida
-        if oid not in counted_ids:
+        # contagem
+        if real_id not in counted_ids:
 
             if prev_y < LINE_Y <= cy:
                 count_in += 1
-                counted_ids.add(oid)
+                counted_ids.add(real_id)
 
             elif prev_y > LINE_Y >= cy:
                 count_out += 1
-                counted_ids.add(oid)
+                counted_ids.add(real_id)
 
         crossed_line = None
 
@@ -136,14 +166,14 @@ while True:
         elif prev_y < LINE2_Y <= cy or prev_y > LINE2_Y >= cy:
             crossed_line = LINE2_Y
 
-        # radar de velocidade
+        # radar
         if crossed_line is not None:
 
-            if oid not in measurements:
+            if real_id not in measurements:
 
                 direction = "ENTRANDO" if cy > prev_y else "SAINDO"
 
-                measurements[oid] = {
+                measurements[real_id] = {
                     "time": now,
                     "line": crossed_line,
                     "direction": direction
@@ -151,7 +181,7 @@ while True:
 
             else:
 
-                first = measurements[oid]
+                first = measurements[real_id]
 
                 if crossed_line != first["line"]:
 
@@ -162,17 +192,17 @@ while True:
                         velocidade = (DISTANCIA_METROS / dt) * 3.6
 
                         last_radar_text = (
-                            f"[RADAR] ID {oid} | {first['direction']} | "
+                            f"[RADAR] ID {real_id} | {first['direction']} | "
                             f"{velocidade:.2f} km/h | {texto_classes}"
                         )
 
                         print(last_radar_text)
 
-                    del measurements[oid]
+                    del measurements[real_id]
 
-        last_positions[oid] = cy
+        last_positions[real_id] = cy
 
-        # desenhar bounding box
+        # desenhar
         cv2.rectangle(frame,
                       (x, y),
                       (x + w, y + h),
@@ -180,14 +210,14 @@ while True:
                       2)
 
         cv2.putText(frame,
-                    f"ID {oid} | {texto_classes}",
+                    f"ID {real_id} | {texto_classes}",
                     (x, y - 10),
                     cv2.FONT_HERSHEY_SIMPLEX,
                     0.5,
                     (0, 255, 0),
                     2)
 
-    # mostrar contadores
+    # HUD
     cv2.putText(frame,
                 f"Entraram: {count_in}",
                 (10, 30),

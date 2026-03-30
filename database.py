@@ -28,6 +28,8 @@ class VectorDatabase:
             (object_id, vector_bytes)
         )
         self.conn.commit()
+        
+        
 
     def get_vector(self, object_id):
         cursor = self.conn.cursor()
@@ -38,3 +40,17 @@ class VectorDatabase:
             return np.frombuffer(row[0], dtype=np.float32)
 
         return None
+    
+    def get_all_vectors(self):
+        cursor = self.conn.cursor()
+        cursor.execute("SELECT object_id, vector FROM embeddings")
+
+        rows = cursor.fetchall()
+
+        results = []
+
+        for object_id, vector_blob in rows:
+            vector = np.frombuffer(vector_blob, dtype=np.float32)
+            results.append((object_id, vector))
+
+        return results
