@@ -14,6 +14,18 @@ db = VectorDatabase()
 embedder = Embedding()
 
 classified_ids = {}
+embeddings_ids = {}  # cria primeiro
+
+# carregar embeddings do banco
+dados_db = db.get_all_vectors()
+
+for rid, oid, arquivo, data_hora, vec in dados_db:
+    if oid not in embeddings_ids:
+        embeddings_ids[oid] = vec
+
+
+
+classified_ids = {}
 embeddings_ids = {}
 
 id_map = {}
@@ -87,7 +99,7 @@ while True:
 
     objects = tracker.update(detections)
 
-    # desenhar linhas
+    # linhas
     cv2.line(frame, (0, LINE_Y), (FRAME_WIDTH, LINE_Y), (255, 0, 0), 2)
     cv2.line(frame, (0, LINE1_Y), (FRAME_WIDTH, LINE1_Y), (0, 255, 0), 2)
     cv2.line(frame, (0, LINE2_Y), (FRAME_WIDTH, LINE2_Y), (0, 0, 255), 2)
@@ -96,13 +108,12 @@ while True:
 
         x, y, w, h = tracker.boxes[oid]
 
-        # usar ID real
         real_id = id_map.get(oid, oid)
 
         prev_y = last_positions.get(real_id, cy)
         now = time.time()
 
-        # classificação e embedding (APENAS UMA VEZ)
+        # classificação + embedding
         if oid not in classified_ids:
 
             if prev_y < LINE2_Y <= cy or prev_y > LINE1_Y >= cy:
@@ -123,7 +134,6 @@ while True:
 
                     embedding = embedder.get_image_embedding(crop)
 
-                    # comparar apenas uma vez
                     similar_id, score = find_similar_id(
                         embedding,
                         embeddings_ids,
@@ -136,7 +146,14 @@ while True:
                         real_id = similar_id
                     else:
                         embeddings_ids[oid] = embedding
-                        db.insert_vector(oid, embedding)
+
+                        # salvar no banco de dados
+                        db.insert_vector(
+                            object_id=oid,
+                            vector=embedding,
+                            arquivo=VIDEO_SOURCE
+                        )
+
                         id_map[oid] = oid
                         real_id = oid
 
@@ -202,12 +219,8 @@ while True:
 
         last_positions[real_id] = cy
 
-        # desenhar
-        cv2.rectangle(frame,
-                      (x, y),
-                      (x + w, y + h),
-                      (0, 255, 0),
-                      2)
+        # desenho
+        cv2.rectangle(frame, (x, y), (x + w, y + h), (0, 255, 0), 2)
 
         cv2.putText(frame,
                     f"ID {real_id} | {texto_classes}",
@@ -218,31 +231,15 @@ while True:
                     2)
 
     # HUD
-    cv2.putText(frame,
-                f"Entraram: {count_in}",
-                (10, 30),
-                cv2.FONT_HERSHEY_SIMPLEX,
-                0.7,
-                (0, 255, 0),
-                2)
+    cv2.putText(frame, f"Entraram: {count_in}", (10, 30),
+                cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 0), 2)
 
-    cv2.putText(frame,
-                f"Sairam: {count_out}",
-                (10, 55),
-                cv2.FONT_HERSHEY_SIMPLEX,
-                0.7,
-                (0, 0, 255),
-                2)
+    cv2.putText(frame, f"Sairam: {count_out}", (10, 55),
+                cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 0, 255), 2)
 
     if last_radar_text:
-
-        cv2.putText(frame,
-                    last_radar_text,
-                    (10, 85),
-                    cv2.FONT_HERSHEY_SIMPLEX,
-                    0.6,
-                    (0, 255, 255),
-                    2)
+        cv2.putText(frame, last_radar_text, (10, 85),
+                    cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 255), 2)
 
     cv2.imshow("Tracking", frame)
     cv2.imshow("Mask", fgmask)
@@ -251,4 +248,5 @@ while True:
         break
 
 cap.release()
+db.fechar()  
 cv2.destroyAllWindows()

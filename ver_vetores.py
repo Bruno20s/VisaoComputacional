@@ -1,3 +1,5 @@
+import os
+import csv
 from database import VectorDatabase
 import numpy as np
 
@@ -13,6 +15,8 @@ print("1 - Ver primeiros 100 valores de TODOS os IDs")
 print("2 - Comparar dois IDs")
 print("3 - Ver primeiros 1000 valores de um ID específico")
 print("4 - Encontrar IDs mais similares a um ID")
+print("5 - Ver posições mais significativas de um ID")
+print("6 - ver os dados e gerar um arquivo CSV com os top 5 índices mais significativos de cada vetor")
 
 opcao = input("Opção: ")
 
@@ -117,6 +121,73 @@ elif opcao == "4":
 
         for oid, score in resultados[:top_n]:
             print(f"ID: {oid} | Similaridade: {score:.4f}")
+            
+elif opcao == "5":
+
+    id_busca = int(input("Digite o ID: "))
+    top_k = int(input("Quantas posições mais importantes deseja ver? "))
+
+    vec_encontrado = None
+
+    for oid, vec in dados:
+        if oid == id_busca:
+            vec_encontrado = vec
+            break
+
+    if vec_encontrado is None:
+        print("ID não encontrado.")
+    else:
+        indices = np.argsort(np.abs(vec_encontrado))[::-1]
+
+        print(f"\nTop {top_k} posições mais significativas do ID {id_busca}:\n")
+
+        for n,i in enumerate(indices[:top_k]):
+            print(f"{n:3} - x[{i:3}]={vec_encontrado[i]:7.4f}")
+
+elif opcao == "6":
+
+    top_k = 5
+    
+    arquivo_saida = "saida_ids.csv"
+    
+    if os.path.exists(arquivo_saida):
+        os.remove(arquivo_saida)
+
+    with open(arquivo_saida, "w", newline="", encoding="utf-8") as f:
+
+        writer = csv.writer(f, delimiter=';')
+
+        writer.writerow([
+            "id_registro",
+            "object_id",
+            "arquivo",
+            "data_hora",
+            "valor1",
+            "valor2",
+            "valor3",
+            "valor4",
+            "valor5",
+            "modulo_top5"
+        ])
+
+        for rid, oid, arquivo, data_hora, vec in dados:
+
+            indices = np.argsort(np.abs(vec))[::-1]
+
+            valores = [float(vec[i]) for i in indices[:top_k]]
+
+            modulo = float(np.linalg.norm(valores))
+
+            writer.writerow([
+                rid,
+                oid,
+                arquivo,
+                data_hora,
+                *valores,
+                modulo
+            ])
+
+    print("Arquivo 'saida_ids.csv' gerado com sucesso!")
 
 
 else:
