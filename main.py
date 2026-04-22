@@ -14,16 +14,14 @@ db = VectorDatabase()
 embedder = Embedding()
 
 classified_ids = {}
-embeddings_ids = {}  # cria primeiro
+embeddings_ids = {}
 
 # carregar embeddings do banco
 dados_db = db.get_all_vectors()
 
-for rid, oid, arquivo, data_hora, vec in dados_db:
+for rid, oid, arquivo, data_hora, vec, classes in dados_db:
     if oid not in embeddings_ids:
         embeddings_ids[oid] = vec
-
-
 
 classified_ids = {}
 embeddings_ids = {}
@@ -99,7 +97,6 @@ while True:
 
     objects = tracker.update(detections)
 
-    # linhas
     cv2.line(frame, (0, LINE_Y), (FRAME_WIDTH, LINE_Y), (255, 0, 0), 2)
     cv2.line(frame, (0, LINE1_Y), (FRAME_WIDTH, LINE1_Y), (0, 255, 0), 2)
     cv2.line(frame, (0, LINE2_Y), (FRAME_WIDTH, LINE2_Y), (0, 0, 255), 2)
@@ -113,14 +110,13 @@ while True:
         prev_y = last_positions.get(real_id, cy)
         now = time.time()
 
-        # classificação + embedding
         if oid not in classified_ids:
 
             if prev_y < LINE2_Y <= cy or prev_y > LINE1_Y >= cy:
 
-                classified_ids[oid] = classify_object(frame, (x, y, w, h))
+                classificacoes = classify_object(frame, (x, y, w, h))
+                classified_ids[oid] = classificacoes
 
-                # crop seguro
                 h_frame, w_frame = frame.shape[:2]
 
                 x1 = max(0, x)
@@ -147,11 +143,11 @@ while True:
                     else:
                         embeddings_ids[oid] = embedding
 
-                        # salvar no banco de dados
                         db.insert_vector(
                             object_id=oid,
                             vector=embedding,
-                            arquivo=VIDEO_SOURCE
+                            arquivo=VIDEO_SOURCE,
+                            classificacoes=classificacoes
                         )
 
                         id_map[oid] = oid
@@ -164,7 +160,6 @@ while True:
 
         texto_classes = "veiculo" if is_vehicle else "nao veiculo"
 
-        # contagem
         if real_id not in counted_ids:
 
             if prev_y < LINE_Y <= cy:
@@ -183,7 +178,6 @@ while True:
         elif prev_y < LINE2_Y <= cy or prev_y > LINE2_Y >= cy:
             crossed_line = LINE2_Y
 
-        # radar
         if crossed_line is not None:
 
             if real_id not in measurements:
@@ -219,7 +213,6 @@ while True:
 
         last_positions[real_id] = cy
 
-        # desenho
         cv2.rectangle(frame, (x, y), (x + w, y + h), (0, 255, 0), 2)
 
         cv2.putText(frame,
@@ -230,7 +223,6 @@ while True:
                     (0, 255, 0),
                     2)
 
-    # HUD
     cv2.putText(frame, f"Entraram: {count_in}", (10, 30),
                 cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 0), 2)
 
@@ -248,5 +240,5 @@ while True:
         break
 
 cap.release()
-db.fechar()  
+db.fechar()
 cv2.destroyAllWindows()

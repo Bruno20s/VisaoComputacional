@@ -7,6 +7,7 @@ class VectorDatabase:
     def __init__(self, db_path="embeddings.db"):
         self.conn = sqlite3.connect(db_path)
         self.create_table()
+        self._ensure_columns()
 
     def create_table(self):
         cursor = self.conn.cursor()
@@ -23,19 +24,55 @@ class VectorDatabase:
 
         self.conn.commit()
 
-    def insert_vector(self, object_id, vector, arquivo):
+    def _ensure_columns(self):
         cursor = self.conn.cursor()
 
-        # converte numpy array para bytes
-        vector_bytes = vector.astype(np.float32).tobytes()
+        cursor.execute("PRAGMA table_info(embeddings)")
+        colunas = [col[1] for col in cursor.fetchall()]
 
-        # data/hora atual
+        novas_colunas = [
+            ("classe1", "TEXT"),
+            ("score1", "REAL"),
+            ("classe2", "TEXT"),
+            ("score2", "REAL"),
+            ("classe3", "TEXT"),
+            ("score3", "REAL"),
+        ]
+
+        for nome, tipo in novas_colunas:
+            if nome not in colunas:
+                cursor.execute(f"ALTER TABLE embeddings ADD COLUMN {nome} {tipo}")
+
+        self.conn.commit()
+
+    # 🔧 insert agora com classificações
+    def insert_vector(self, object_id, vector, arquivo, classificacoes):
+        cursor = self.conn.cursor()
+
+        vector_bytes = vector.astype(np.float32).tobytes()
         data_hora = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
+        # garante 3 classificações
+        classificacoes = classificacoes[:3]
+        while len(classificacoes) < 3:
+            classificacoes.append(("desconhecido", 0.0))
+
+        (c1, s1), (c2, s2), (c3, s3) = classificacoes
+
         cursor.execute("""
-        INSERT INTO embeddings (object_id, arquivo, data_hora, vector)
-        VALUES (?, ?, ?, ?)
-        """, (object_id, arquivo, data_hora, vector_bytes))
+        INSERT INTO embeddings (
+            object_id, arquivo, data_hora, vector,
+            classe1, score1,
+            classe2, score2,
+            classe3, score3
+        )
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """, (
+            object_id, arquivo, data_hora, vector_bytes,
+            c1, s1,
+            c2, s2,
+            c3, s3
+        ))
 
         self.conn.commit()
 
@@ -58,7 +95,10 @@ class VectorDatabase:
         cursor = self.conn.cursor()
 
         cursor.execute("""
-        SELECT id, object_id, arquivo, data_hora, vector
+        SELECT id, object_id, arquivo, data_hora, vector,
+               classe1, score1,
+               classe2, score2,
+               classe3, score3
         FROM embeddings
         """)
 
@@ -66,9 +106,20 @@ class VectorDatabase:
 
         results = []
 
-        for rid, object_id, arquivo, data_hora, vector_blob in rows:
+        for (rid, object_id, arquivo, data_hora, vector_blob,
+             c1, s1, c2, s2, c3, s3) in rows:
+
             vector = np.frombuffer(vector_blob, dtype=np.float32)
-            results.append((rid, object_id, arquivo, data_hora, vector))
+
+            classes = [
+                (c1, s1),
+                (c2, s2),
+                (c3, s3)
+            ]
+
+            results.append((
+                rid, object_id, arquivo, data_hora, vector, classes
+            ))
 
         return results
 
@@ -77,6 +128,7 @@ class VectorDatabase:
         cursor.execute("DROP TABLE IF EXISTS embeddings")
         self.conn.commit()
         self.create_table()
+        self._ensure_columns()
 
     def clear_table(self):
         cursor = self.conn.cursor()

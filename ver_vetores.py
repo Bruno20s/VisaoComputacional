@@ -1,7 +1,9 @@
 import os
 import csv
+import cv2
 from database import VectorDatabase
 import numpy as np
+from collections import Counter
 
 db = VectorDatabase()
 dados = db.get_all_vectors()
@@ -16,7 +18,8 @@ print("2 - Comparar dois IDs")
 print("3 - Ver primeiros 1000 valores de um ID específico")
 print("4 - Encontrar IDs mais similares a um ID")
 print("5 - Ver posições mais significativas de um ID")
-print("6 - ver os dados e gerar um arquivo CSV com os top 5 índices mais significativos de cada vetor")
+print("6 - Gerar CSV com top 5 posições de cada vetor")
+print("7 - Ver top classificações de um ID")
 
 opcao = input("Opção: ")
 
@@ -24,8 +27,8 @@ opcao = input("Opção: ")
 # mostrar todos
 if opcao == "1":
 
-    for oid, vec in dados:
-        print(f"\nID: {oid}")
+    for rid, oid, arquivo, data_hora, vec, _ in dados:
+        print(f"\nOBJECT_ID: {oid}")
         print(f"Tamanho: {len(vec)}")
         print(f"Primeiros 100 valores:\n{vec[:100]}")
         print("-" * 40)
@@ -45,7 +48,7 @@ elif opcao == "2":
     vec1 = None
     vec2 = None
 
-    for oid, vec in dados:
+    for rid, oid, arquivo, data_hora, vec, _ in dados:
         if oid == id1:
             vec1 = vec
         elif oid == id2:
@@ -63,6 +66,7 @@ elif opcao == "2":
 
         print(f"\nSimilaridade: {score:.4f}")
 
+
 # mostrar um específico
 elif opcao == "3":
 
@@ -70,7 +74,7 @@ elif opcao == "3":
 
     vec_encontrado = None
 
-    for oid, vec in dados:
+    for rid, oid, arquivo, data_hora, vec, _ in dados:
         if oid == id_busca:
             vec_encontrado = vec
             break
@@ -81,11 +85,11 @@ elif opcao == "3":
         print(f"\nID: {id_busca}")
         print(f"Tamanho: {len(vec_encontrado)}")
 
-        # garante que não estoura se tiver menos de 1000
         limite = min(1000, len(vec_encontrado))
-
         print(f"Primeiros {limite} valores:\n{vec_encontrado[:limite]}")
-        
+
+
+# similares
 elif opcao == "4":
 
     def cosine_similarity(vec1, vec2):
@@ -98,8 +102,7 @@ elif opcao == "4":
 
     vec_base = None
 
-    # encontrar vetor base
-    for oid, vec in dados:
+    for rid, oid, arquivo, data_hora, vec, _ in dados:
         if oid == id_base:
             vec_base = vec
             break
@@ -109,19 +112,20 @@ elif opcao == "4":
     else:
         resultados = []
 
-        for oid, vec in dados:
+        for rid, oid, arquivo, data_hora, vec, _ in dados:
             if oid != id_base:
                 score = cosine_similarity(vec_base, vec)
                 resultados.append((oid, score))
 
-        # ordenar do maior pro menor
         resultados.sort(key=lambda x: x[1], reverse=True)
 
         print(f"\nTop {top_n} mais similares ao ID {id_base}:\n")
 
         for oid, score in resultados[:top_n]:
             print(f"ID: {oid} | Similaridade: {score:.4f}")
-            
+
+
+# posições importantes
 elif opcao == "5":
 
     id_busca = int(input("Digite o ID: "))
@@ -129,7 +133,7 @@ elif opcao == "5":
 
     vec_encontrado = None
 
-    for oid, vec in dados:
+    for rid, oid, arquivo, data_hora, vec, _ in dados:
         if oid == id_busca:
             vec_encontrado = vec
             break
@@ -141,17 +145,13 @@ elif opcao == "5":
 
         print(f"\nTop {top_k} posições mais significativas do ID {id_busca}:\n")
 
-        for n,i in enumerate(indices[:top_k]):
-            print(f"{n:3} - x[{i:3}]={vec_encontrado[i]:7.4f}")
+        for n, i in enumerate(indices[:top_k]):
+            print(f"{n:3} - x[{i:3}] = {vec_encontrado[i]:7.4f}")
 
 elif opcao == "6":
 
     top_k = 5
-    
     arquivo_saida = "saida_ids.csv"
-    
-    if os.path.exists(arquivo_saida):
-        os.remove(arquivo_saida)
 
     with open(arquivo_saida, "w", newline="", encoding="utf-8") as f:
 
@@ -162,33 +162,74 @@ elif opcao == "6":
             "object_id",
             "arquivo",
             "data_hora",
-            "valor1",
-            "valor2",
-            "valor3",
-            "valor4",
-            "valor5",
+            "pos1", "val1",
+            "pos2", "val2",
+            "pos3", "val3",
+            "pos4", "val4",
+            "pos5", "val5",
             "modulo_top5"
         ])
 
-        for rid, oid, arquivo, data_hora, vec in dados:
+        for rid, oid, arquivo, data_hora, vec, _ in dados:
 
             indices = np.argsort(np.abs(vec))[::-1]
-
-            valores = [float(vec[i]) for i in indices[:top_k]]
+            posicoes = indices[:top_k]
+            valores = [float(vec[i]) for i in posicoes]
 
             modulo = float(np.linalg.norm(valores))
 
-            writer.writerow([
-                rid,
-                oid,
-                arquivo,
-                data_hora,
-                *valores,
-                modulo
-            ])
+            linha = [rid, oid, arquivo, data_hora]
+
+            for p, v in zip(posicoes, valores):
+                linha.append(int(p))
+                linha.append(v)
+
+            linha.append(modulo)
+
+            writer.writerow(linha)
 
     print("Arquivo 'saida_ids.csv' gerado com sucesso!")
 
+elif opcao == "7":
+
+    object_id_busca = int(input("Digite o OBJECT_ID: "))
+    top_k = 3
+
+    resultados = []
+
+    for rid, oid, arquivo, data_hora, vec, classes in dados:
+
+        if oid != object_id_busca:
+            continue
+
+        for classe, score in classes:
+
+            if classe is None:
+                continue
+
+            try:
+                score = float(score)
+            except (TypeError, ValueError):
+                continue
+
+            resultados.append((classe, score, arquivo))
+
+    if not resultados:
+        print("Nenhum dado válido encontrado para esse ID.")
+    else:
+        resultados.sort(key=lambda x: x[1], reverse=True)
+
+        print(f"\nTop {top_k} classificações para ID {object_id_busca}:\n")
+
+        for i, (classe, score, arquivo) in enumerate(resultados[:top_k]):
+            print(f"{i+1:2} - {classe:15} | {score:.4f} | {arquivo}")
+
+        from collections import Counter
+
+        classes_lista = [c for c, _, _ in resultados]
+
+        print("\nFrequência das classes:")
+        print(Counter(classes_lista))
 
 else:
     print("Opção inválida.")

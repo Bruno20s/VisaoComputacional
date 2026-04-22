@@ -16,11 +16,14 @@ The system detects vehicles, assigns temporary IDs, tracks their movement across
 - [main.py](main.py): Main script for vehicle detection, tracking, counting, classification, and speed estimation.
 - [classifier.py](classifier.py): Handles object classification using YOLO classification models.
 - [config.py](config.py): Configuration file with constants for video source, frame dimensions, thresholds, and vehicle keywords.
-- [detectar_rostos.py](detectar_rostos.py): Face detection script using Haar cascades.
+- [database.py](database.py): Handles database operations for storing and retrieving vector embeddings using SQLite.
 - [embedding.py](embedding.py): Generates image embeddings using CLIP for detected objects.
 - [tracker.py](tracker.py): Centroid-based object tracker for maintaining object IDs across frames.
 - [utils.py](utils.py): Utility functions, including bounding box merging.
+- [resetdb.py](resetdb.py): Script to reset the vector database.
 - [testecv.py](testecv.py): Test script for computer vision functionalities.
+- [ver_vetores.py](ver_vetores.py): Script to view and analyze stored vector embeddings.
+- saida_ids.csv: Output CSV file containing tracked vehicle IDs.
 
 ## Requirements
 - Python 3.8+
@@ -66,10 +69,16 @@ Run the main vehicle detection and tracking script:
 python main.py
 ```
 
-For face detection:
+To reset the vector database:
 
 ```bash
-python detectar_rostos.py
+python resetdb.py
+```
+
+To view and analyze stored vector embeddings:
+
+```bash
+python ver_vetores.py
 ```
 
 To run the test script:
