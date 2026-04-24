@@ -1,6 +1,7 @@
 import cv2
 import numpy as np
 import time
+import logging
 
 from config import *
 from tracker import CentroidTracker
@@ -9,19 +10,23 @@ from classifier import classify_object
 from embedding import Embedding, find_similar_id
 from database import VectorDatabase
 
-db = VectorDatabase()
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s [%(levelname)s] %(message)s"
+)
+logger = logging.getLogger(__name__)
 
-embedder = Embedding()
+try:
+    db = VectorDatabase()
+except Exception as e:
+    logger.error(f"Erro ao conectar no banco de dados: {e}")
+    raise
 
-classified_ids = {}
-embeddings_ids = {}
-
-# carregar embeddings do banco
-dados_db = db.get_all_vectors()
-
-for rid, oid, arquivo, data_hora, vec, classes in dados_db:
-    if oid not in embeddings_ids:
-        embeddings_ids[oid] = vec
+try:
+    embedder = Embedding()
+except Exception as e:
+    logger.error(f"Erro ao carregar modelo CLIP: {e}")
+    raise
 
 classified_ids = {}
 embeddings_ids = {}
@@ -42,6 +47,10 @@ cv2.setUseOptimized(True)
 
 cap = cv2.VideoCapture(VIDEO_SOURCE)
 
+if not cap.isOpened():
+    logger.error(f"Não foi possível abrir o vídeo: {VIDEO_SOURCE}")
+    raise RuntimeError(f"Falha ao abrir vídeo: {VIDEO_SOURCE}")
+
 bg = cv2.createBackgroundSubtractorMOG2(
     history=300,
     varThreshold=40,
@@ -61,9 +70,9 @@ while True:
 
     frame = cv2.resize(frame, (FRAME_WIDTH, FRAME_HEIGHT))
     
-    h, w = frame.shape[:2]
+    frame_h, frame_w = frame.shape[:2]
 
-    MERGE_DISTANCE = int(w * MERGE_DISTANCE_RATIO)
+    MERGE_DISTANCE = int(frame_w * MERGE_DISTANCE_RATIO)
 
     gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
 
@@ -91,8 +100,8 @@ while True:
     merged_boxes = merge_boxes(raw_boxes, MERGE_DISTANCE)
 
     detections = [
-        ((x + w // 2, y + h // 2), (x, y, w, h))
-        for (x, y, w, h) in merged_boxes
+        ((bx + bw // 2, by + bh // 2), (bx, by, bw, bh))
+        for (bx, by, bw, bh) in merged_boxes
     ]
 
     objects = tracker.update(detections)
@@ -103,7 +112,7 @@ while True:
 
     for oid, (cx, cy) in objects.items():
 
-        x, y, w, h = tracker.boxes[oid]
+        x, y, bw, bh = tracker.boxes[oid]
 
         real_id = id_map.get(oid, oid)
 
@@ -114,15 +123,13 @@ while True:
 
             if prev_y < LINE2_Y <= cy or prev_y > LINE1_Y >= cy:
 
-                classificacoes = classify_object(frame, (x, y, w, h))
+                classificacoes = classify_object(frame, (x, y, bw, bh))
                 classified_ids[oid] = classificacoes
-
-                h_frame, w_frame = frame.shape[:2]
 
                 x1 = max(0, x)
                 y1 = max(0, y)
-                x2 = min(w_frame, x + w)
-                y2 = min(h_frame, y + h)
+                x2 = min(frame_w, x + bw)
+                y2 = min(frame_h, y + bh)
 
                 crop = frame[y1:y2, x1:x2]
 
@@ -137,7 +144,7 @@ while True:
                     )
 
                     if similar_id is not None:
-                        print(f"[MATCH] ID {oid} → {similar_id} | score={score:.2f}")
+                        logger.info(f"[MATCH] ID {oid} → {similar_id} | score={score:.2f}")
                         id_map[oid] = similar_id
                         real_id = similar_id
                     else:
@@ -207,13 +214,13 @@ while True:
                             f"{velocidade:.2f} km/h | {texto_classes}"
                         )
 
-                        print(last_radar_text)
+                        logger.info(last_radar_text)
 
                     del measurements[real_id]
 
         last_positions[real_id] = cy
 
-        cv2.rectangle(frame, (x, y), (x + w, y + h), (0, 255, 0), 2)
+        cv2.rectangle(frame, (x, y), (x + bw, y + bh), (0, 255, 0), 2)
 
         cv2.putText(frame,
                     f"ID {real_id} | {texto_classes}",
@@ -242,3 +249,4 @@ while True:
 cap.release()
 db.fechar()
 cv2.destroyAllWindows()
+logger.info(f"Finalizado. Entraram: {count_in} | Saíram: {count_out}")

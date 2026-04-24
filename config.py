@@ -34,5 +34,9 @@ vehicle_keywords = {
 "moving_van",
 "trailer_truck",
 "tow_truck",
-"mountain_bike"
+"mountain_bike",
+"pickelhaube",
+"crash_helmet",
+"football_helmet",
+"motorcycle"
 }

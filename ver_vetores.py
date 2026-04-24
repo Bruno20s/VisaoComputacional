@@ -193,7 +193,7 @@ elif opcao == "6":
 elif opcao == "7":
 
     object_id_busca = int(input("Digite o OBJECT_ID: "))
-    top_k = 3
+    top_k = 10
 
     resultados = []
 
@@ -217,6 +217,8 @@ elif opcao == "7":
     if not resultados:
         print("Nenhum dado válido encontrado para esse ID.")
     else:
+        # remove duplicatas (mesmo arquivo, classe e score)
+        resultados = list(set(resultados))
         resultados.sort(key=lambda x: x[1], reverse=True)
 
         print(f"\nTop {top_k} classificações para ID {object_id_busca}:\n")
