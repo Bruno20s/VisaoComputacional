@@ -2,9 +2,6 @@ from PIL import Image
 import torch
 import clip
 import numpy as np
-from database import VectorDatabase
-
-db = VectorDatabase()
 
 class Embedding:
 
@@ -45,7 +42,7 @@ def cosine_similarity(vec1, vec2):
 
 
 # encontra ID parecido
-def find_similar_id(new_embedding, embeddings_ids, threshold=0.85):
+def find_similar_id(new_embedding, embeddings_ids, threshold=0.95):
 
     best_id = None
     best_score = -1

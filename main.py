@@ -30,9 +30,18 @@ except Exception as e:
 
 classified_ids = {}
 embeddings_ids = {}
+embeddings_source = {}
+
+# carregar embeddings do banco
+dados_db = db.get_all_vectors()
+
+for rid, oid, arquivo, data_hora, vec, classes in dados_db:
+    if oid not in embeddings_ids:
+        embeddings_ids[oid] = vec
+        embeddings_source[oid] = arquivo
 
 id_map = {}
-SIMILARITY_THRESHOLD = 0.98
+SIMILARITY_THRESHOLD = 0.95
 
 count_in = 0
 count_out = 0
@@ -144,21 +153,19 @@ while True:
                     )
 
                     if similar_id is not None:
-                        logger.info(f"[MATCH] ID {oid} → {similar_id} | score={score:.2f}")
-                        id_map[oid] = similar_id
-                        real_id = similar_id
-                    else:
-                        embeddings_ids[oid] = embedding
+                        source = embeddings_source.get(similar_id, VIDEO_SOURCE)
+                        if source != VIDEO_SOURCE:
+                            logger.info(f"[MATCH] ID {oid} similar a {similar_id} (video: {source}) | score={score:.2f}")
 
-                        db.insert_vector(
-                            object_id=oid,
-                            vector=embedding,
-                            arquivo=VIDEO_SOURCE,
-                            classificacoes=classificacoes
-                        )
+                    embeddings_ids[oid] = embedding
+                    embeddings_source[oid] = VIDEO_SOURCE
 
-                        id_map[oid] = oid
-                        real_id = oid
+                    db.insert_vector(
+                        object_id=oid,
+                        vector=embedding,
+                        arquivo=VIDEO_SOURCE,
+                        classificacoes=classificacoes
+                    )
 
         classes = classified_ids.get(oid, [("...", 0.0)])
 
